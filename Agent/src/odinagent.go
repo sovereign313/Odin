@@ -11,11 +11,10 @@ import (
 	"runtime"
 	"syscall"
 
+	"os/exec"
 	"net/http"
 	"io/ioutil"
 	"encoding/json"
-
-	"github.com/ochapman/godmi"
 )
 
 const authtoken = "Vr6GMEb5IMZjpHezkxvUO0TWLh1ioxbD1"
@@ -34,10 +33,13 @@ var cmdbhost string
 var tagfile string
 
 func GetUUID() string {
-	godmi.Init()
-	sysinfo := godmi.GetSystemInformation()
+	uuid, err := exec.Command("/usr/sbin/dmidecode", "-s", "system-uuid").CombinedOutput()
+	if err != nil {
+		fmt.Println(err.Error())
+		return ""
+	}
 
-	return sysinfo.UUID
+	return string(uuid)
 }
 
 func GetHostname() (string, error) {
@@ -130,6 +132,7 @@ func Register(key string) (bool, error) {
 	tgs["memory"] = mem
 	tgs["hostname"] = hname
 	tgs["check_in_time"] = now
+	tgs["os"] = runtime.GOOS
 	for k, v := range netdev {
 		tgs[k] = v
 	}
@@ -217,6 +220,7 @@ func Update(key string) (bool, error) {
 	tgs["cpucount"] = cpucount
 	tgs["hostname"] = hname
 	tgs["check_in_time"] = now
+	tgs["os"] = runtime.GOOS
 	for k, v := range netdev {
 		tgs[k] = v
 	}

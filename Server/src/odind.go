@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"time"
+	"strings"
+	"strconv"
 
 	"net/http"
 	"encoding/json"
@@ -22,6 +25,8 @@ type Record struct {
 }
 
 var db *badger.DB
+var dcs []string
+
 
 func handleWhoAreYou(w http.ResponseWriter, r *http.Request) {
         fmt.Fprintf(w, "Odin CMDB Server")
@@ -79,10 +84,15 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tmpRecord := Record{}
-	tmpRecord.Key = key 
+	tmpRecord.Key = strings.TrimSpace(key)
 	if len(tmptags) != 0 {
 		tmpRecord.Tags = tmptags 
 	}
+
+
+        now := strconv.Itoa(int(time.Now().Unix()))
+	tmpRecord.Tags["update_time"] = now 
+	tmpRecord.Tags["registered_time"] = now
 
 	err = InsertRecord(db, tmpRecord)
 	if err != nil {
@@ -114,7 +124,15 @@ func handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 	for k, v := range tmptags {
 		tmpRecord.Tags[k] = v
 	}
-	
+
+	if len(tmpRecord.Tags["registered_time"]) > 0 {
+		fmt.Fprintf(w, "Error: Tried to write to a read only value: registered_time")
+		return
+	}
+
+        now := strconv.Itoa(int(time.Now().Unix()))
+	tmpRecord.Tags["update_time"] = now 
+
 	err = UpdateRecord(db, tmpRecord)
 	if err != nil {
 		fmt.Fprintf(w, err.Error())
@@ -164,7 +182,8 @@ func handleGetRecords(w http.ResponseWriter, r *http.Request) {
 
 	for _, r := range rec {
 		for k, v := range r.Tags {
-			if k == tag || v == tag {
+			if strings.Contains(k, tag) || strings.Contains(v, tag) {
+//			if k == tag || v == tag {
 				records = append(records, r)
 			}
 		}
@@ -180,6 +199,17 @@ func handleGetRecords(w http.ResponseWriter, r *http.Request) {
 	return	
 }
 
+func handleGC(w http.ResponseWriter, r *http.Request) {
+	err := db.RunValueLogGC(0.7)
+	if err != nil {
+		fmt.Fprintf(w, err.Error())
+		return
+	}
+
+	fmt.Fprintf(w, "success")
+	return	
+}
+
 func main() {
 	var err error
 
@@ -191,6 +221,7 @@ func main() {
 	router.HandleFunc("/getrecords", handleGetRecords)
 	router.HandleFunc("/getrecord", handleGetRecord)
 	router.HandleFunc("/updaterecord", handleUpdateRecord)
+	router.HandleFunc("/gc", handleGC)
         router.HandleFunc("/", handleHelp)
 
 	db, err = ConnectDB()
@@ -198,6 +229,9 @@ func main() {
 		fmt.Println(err.Error())
 		return
 	}
+
+
+	
 
 
         err = http.ListenAndServe(":8088", router)
@@ -253,13 +287,13 @@ func GetRecord(db *badger.DB, key string) (Record, error) {
 
 func GetRecords(db *badger.DB) ([]Record, error) {
 	tmprecords := []Record{}
-	tmprecord := Record{}
 	err := db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 10
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		for it.Rewind(); it.Valid(); it.Next() {
+			tmprecord := Record{}
 			item := it.Item()
 			err := item.Value(func(v []byte) error {
 				err := json.Unmarshal(v, &tmprecord)

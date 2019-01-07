@@ -1,0 +1,14 @@
+[Unit]
+Description=Odin CMDB Agent
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Environment="cmdbhost=pu1cmdb1001.cac.com"
+Type=simple
+Restart=always
+RestartSec=1
+ExecStart=/usr/local/bin/odinagent
+
+[Install]
+WantedBy=multi-user.target
