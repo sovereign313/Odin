@@ -83,7 +83,7 @@ func GetIPs() (map[string]string, error) {
 
 		if len(ip) > 0 {
 			ip = ip[:len(ip) - 1]
-			netdev[f.Name] = ip
+			netdev["sys." + f.Name] = ip
 		}
 	}
 
@@ -129,11 +129,11 @@ func Register(key string) (bool, error) {
 	numcpu := runtime.NumCPU()
 	cpucount := strconv.Itoa(numcpu)
 
-	tgs["cpucount"] = cpucount
-	tgs["memory"] = mem
-	tgs["hostname"] = hname
-	tgs["check_in_time"] = now
-	tgs["os"] = runtime.GOOS
+	tgs["sys.cpucount"] = cpucount
+	tgs["sys.memory"] = mem
+	tgs["sys.hostname"] = hname
+	tgs["sys.check_in_time"] = now
+	tgs["sys.os"] = runtime.GOOS
 	for k, v := range netdev {
 		tgs[k] = v
 	}
@@ -217,11 +217,11 @@ func Update(key string) (bool, error) {
 	memi := GetMemory()
 	mem := strconv.Itoa(int(memi))
 
-	tgs["memory"] = mem
-	tgs["cpucount"] = cpucount
-	tgs["hostname"] = hname
-	tgs["check_in_time"] = now
-	tgs["os"] = runtime.GOOS
+	tgs["sys.memory"] = mem
+	tgs["sys.cpucount"] = cpucount
+	tgs["sys.hostname"] = hname
+	tgs["sys.check_in_time"] = now
+	tgs["sys.os"] = runtime.GOOS
 
 	for k, v := range netdev {
 		tgs[k] = v
@@ -275,7 +275,7 @@ func main() {
 
 	tagfile = os.Getenv("tagfile")
 	if len(tagfile) == 0 {
-		tagfile = "/etc/tags"
+		tagfile = "c:\\windows\\system32\\tags"
 	}
 
 	ok, err := Register(GetUUID())

@@ -31,14 +31,16 @@ type NetDev struct {
 
 var cmdbhost string
 var tagfile string
+var apptagfile string
 
 func GetUUID() string {
-	uuid, err := exec.Command("/usr/sbin/dmidecode", "-s", "system-uuid").CombinedOutput()
+	buuid, err := exec.Command("/usr/sbin/dmidecode", "-s", "system-uuid").CombinedOutput()
 	if err != nil {
 		fmt.Println(err.Error())
 		return ""
 	}
 
+	uuid := strings.TrimSpace(string(buuid))
 	return string(uuid)
 }
 
@@ -82,7 +84,7 @@ func GetIPs() (map[string]string, error) {
 
 		if len(ip) > 0 {
 			ip = ip[:len(ip) - 1]
-			netdev[f.Name] = ip
+			netdev["sys." + f.Name] = ip
 		}
 	}
 
@@ -112,6 +114,23 @@ func Register(key string) (bool, error) {
 		os.Remove(tagfile)
 	}
 
+	if _, err := os.Stat(apptagfile); ! os.IsNotExist(err) {
+		rawlines, err := ioutil.ReadFile(apptagfile)
+		if err != nil {
+			return false, err
+		}
+
+		parts := strings.Split(string(rawlines), "\n")
+		for _, line := range parts {
+			sep := strings.Split(line, "=")
+			k1 := strings.TrimSpace(sep[0])
+			v1 := strings.TrimSpace(sep[1])
+			tgs[k1] = v1
+		}
+
+		os.Remove(apptagfile)
+	}
+
 	hname, errr := GetHostname()
 	if errr != nil {
 		return false, errr
@@ -128,11 +147,11 @@ func Register(key string) (bool, error) {
 	numcpu := runtime.NumCPU()
 	cpucount := strconv.Itoa(numcpu)
 
-	tgs["cpucount"] = cpucount
-	tgs["memory"] = mem
-	tgs["hostname"] = hname
-	tgs["check_in_time"] = now
-	tgs["os"] = runtime.GOOS
+	tgs["sys.cpucount"] = cpucount
+	tgs["sys.memory"] = mem
+	tgs["sys.hostname"] = hname
+	tgs["sys.check_in_time"] = now
+	tgs["sys.os"] = runtime.GOOS
 	for k, v := range netdev {
 		tgs[k] = v
 	}
@@ -200,6 +219,23 @@ func Update(key string) (bool, error) {
 		os.Remove(tagfile)
 	}
 
+	if _, err := os.Stat(apptagfile); ! os.IsNotExist(err) {
+		rawlines, err := ioutil.ReadFile(apptagfile)
+		if err != nil {
+			return false, err
+		}
+
+		parts := strings.Split(string(rawlines), "\n")
+		for _, line := range parts {
+			sep := strings.Split(line, "=")
+			k1 := strings.TrimSpace(sep[0])
+			v1 := strings.TrimSpace(sep[1])
+			tgs[k1] = v1
+		}
+
+		os.Remove(apptagfile)
+	}
+
 	hname, errr := GetHostname()
 	if errr != nil {
 		return false, errr
@@ -216,11 +252,11 @@ func Update(key string) (bool, error) {
 	memi := GetMemory()
 	mem := strconv.Itoa(int(memi))
 
-	tgs["memory"] = mem
-	tgs["cpucount"] = cpucount
-	tgs["hostname"] = hname
-	tgs["check_in_time"] = now
-	tgs["os"] = runtime.GOOS
+	tgs["sys.memory"] = mem
+	tgs["sys.cpucount"] = cpucount
+	tgs["sys.hostname"] = hname
+	tgs["sys.check_in_time"] = now
+	tgs["sys.os"] = runtime.GOOS
 	for k, v := range netdev {
 		tgs[k] = v
 	}
@@ -274,6 +310,11 @@ func main() {
 	tagfile = os.Getenv("tagfile")
 	if len(tagfile) == 0 {
 		tagfile = "/etc/tags"
+	}
+
+	apptagfile = os.Getenv("apptagfile")
+	if len(apptagfile) == 0 {
+		apptagfile = "/proj/app/tags"
 	}
 
 	ok, err := Register(GetUUID())
