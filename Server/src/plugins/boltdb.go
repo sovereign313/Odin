@@ -21,6 +21,15 @@ func ConnectDB() (error) {
                 return err
         }
 
+        err = db.Update(func(txn *bolt.Tx) error {
+		_, err := txn.CreateBucketIfNotExists([]byte("odin"))
+		if err != nil {
+			return err
+		}
+
+		return nil
+        })
+
         return nil
 }
 
