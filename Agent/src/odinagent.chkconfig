@@ -1,0 +1,29 @@
+#!/bin/sh
+# PDF Merging Tool
+#
+# chkconfig: 123 69 68
+# description: Merges PDF's Into A Single PDF 
+. /etc/init.d/functions
+
+if [ -f /etc/sysconfig/BLAH ]; then
+. /etc/sysconfig/BLAH
+fi
+
+#
+# Below is the Script Goodness controlling the service
+#
+
+case "$1" in
+	start)
+		echo "Start service odinagent"
+		/usr/local/bin/odinagent &
+	;;
+	stop)
+		echo "Stop service odinagent"
+		killall -9 odinagent
+	;;
+	*)
+		echo "Usage: $0 {start|stop}"
+		exit 1
+	;;
+esac

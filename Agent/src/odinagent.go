@@ -91,6 +91,18 @@ func GetIPs() (map[string]string, error) {
 	return netdev, nil
 }
 
+func GetRelease() (string, error) {
+	if _, err := os.Stat("/etc/redhat-release"); os.IsNotExist(err) {
+		return "generic", nil
+        }
+
+	b, err := ioutil.ReadFile("/etc/redhat-release")
+	if err != nil {
+		return "generic", nil
+	}
+	return string(b), nil
+}
+
 func Register(key string) (bool, error) {
 	var tgs map[string]string
 	var parms string
@@ -105,13 +117,20 @@ func Register(key string) (bool, error) {
 
 		parts := strings.Split(string(rawlines), "\n")
 		for _, line := range parts {
+			if line == "" {
+				continue
+			}
+
 			sep := strings.Split(line, "=")
 			k1 := strings.TrimSpace(sep[0])
 			v1 := strings.TrimSpace(sep[1])
+
+			if ! strings.Contains(k1, ".") {
+				continue
+			}
+
 			tgs[k1] = v1
 		}
-
-		os.Remove(tagfile)
 	}
 
 	if _, err := os.Stat(apptagfile); ! os.IsNotExist(err) {
@@ -122,13 +141,20 @@ func Register(key string) (bool, error) {
 
 		parts := strings.Split(string(rawlines), "\n")
 		for _, line := range parts {
+			if line == "" {
+				continue
+			}
+
 			sep := strings.Split(line, "=")
 			k1 := strings.TrimSpace(sep[0])
 			v1 := strings.TrimSpace(sep[1])
+
+			if ! strings.Contains(k1, ".") {
+				continue
+			}
+
 			tgs[k1] = v1
 		}
-
-		os.Remove(apptagfile)
 	}
 
 	hname, errr := GetHostname()
@@ -146,12 +172,15 @@ func Register(key string) (bool, error) {
 	mem := strconv.Itoa(int(memi))
 	numcpu := runtime.NumCPU()
 	cpucount := strconv.Itoa(numcpu)
+	release, _ := GetRelease()
 
 	tgs["sys.cpucount"] = cpucount
 	tgs["sys.memory"] = mem
 	tgs["sys.hostname"] = hname
 	tgs["sys.check_in_time"] = now
 	tgs["sys.os"] = runtime.GOOS
+	tgs["sys.release"] = release 
+
 	for k, v := range netdev {
 		tgs[k] = v
 	}
@@ -193,6 +222,14 @@ func Register(key string) (bool, error) {
 		return false, nil
 	}
 
+	if _, err := os.Stat(tagfile); ! os.IsNotExist(err) {
+		os.Remove(tagfile)
+	}
+
+	if _, err := os.Stat(apptagfile); ! os.IsNotExist(err) {
+		os.Remove(apptagfile)
+	}
+
 	return true, nil
 }
 
@@ -210,9 +247,18 @@ func Update(key string) (bool, error) {
 
 		parts := strings.Split(string(rawlines), "\n")
 		for _, line := range parts {
+			if line == "" {
+				continue
+			}
+
 			sep := strings.Split(line, "=")
 			k1 := strings.TrimSpace(sep[0])
 			v1 := strings.TrimSpace(sep[1])
+
+			if ! strings.Contains(k1, ".") {
+				continue
+			}
+
 			tgs[k1] = v1
 		}
 
@@ -227,9 +273,18 @@ func Update(key string) (bool, error) {
 
 		parts := strings.Split(string(rawlines), "\n")
 		for _, line := range parts {
+			if line == "" {
+				continue
+			}
+
 			sep := strings.Split(line, "=")
 			k1 := strings.TrimSpace(sep[0])
 			v1 := strings.TrimSpace(sep[1])
+
+			if ! strings.Contains(k1, ".") {
+				continue
+			}
+
 			tgs[k1] = v1
 		}
 
@@ -251,12 +306,15 @@ func Update(key string) (bool, error) {
 	cpucount := strconv.Itoa(numcpu)
 	memi := GetMemory()
 	mem := strconv.Itoa(int(memi))
+	release, _ := GetRelease()
 
 	tgs["sys.memory"] = mem
 	tgs["sys.cpucount"] = cpucount
 	tgs["sys.hostname"] = hname
 	tgs["sys.check_in_time"] = now
 	tgs["sys.os"] = runtime.GOOS
+	tgs["sys.release"] = release
+ 
 	for k, v := range netdev {
 		tgs[k] = v
 	}

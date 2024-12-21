@@ -310,6 +310,133 @@ func handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 	return	
 }
 
+func handleDeleteTag(w http.ResponseWriter, r *http.Request) {
+	var tmptags map[string]string
+
+	apikey := r.FormValue("apikey")
+	key := r.FormValue("key")
+	tag := r.FormValue("tag")
+	token := r.FormValue("token")
+
+	if len(key) == 0 {
+		fmt.Fprintf(w, "Missing 'key' parameter")
+		return
+	}
+
+	if len(tag) == 0 {
+		fmt.Fprintf(w, "Missing 'tags' parameter")
+		return
+	}
+
+	if token != authtoken {
+		flag := false
+		if len(apikey) == 0 {
+			fmt.Fprintf(w, "Missing 'apikey' parameter")
+			return
+		}
+
+		if _, ok := apikeys[apikey]; ! ok {
+			fmt.Fprintf(w, "API Key is not authorized or valid")
+			return
+		}
+
+		if ! strings.Contains(tag, ".") {
+			flag = true
+		} else {
+			parts := strings.Split(tag, ".")
+			if parts[0] != apikeys[apikey] {
+				flag = true
+			}
+		}
+
+		if flag {
+			fmt.Fprintf(w, "Failed! Trying To Delete A Key Not Belonging To Your Team")
+			return
+		}
+	} 
+
+	tmpRecord, err := GetRecord(key)
+	if err != nil {
+		fmt.Fprintf(w, err.Error())
+		return
+	}
+
+	if _, ok := tmpRecord.Tags[tag]; ! ok {
+		fmt.Fprintf(w, "Failed!  Tag Doesn't Exist")
+		return
+	}
+
+	flag := false
+	for k, v := range tmptags {
+		if k == "sys.registered_time" {
+			flag = true
+		}
+
+		tmpRecord.Tags[k] = v
+	}
+
+	if flag {
+		fmt.Fprintf(w, "Error: Tried to write to a read only value: sys.registered_time")
+		return
+	}
+
+        now := strconv.Itoa(int(time.Now().Unix()))
+	tmpRecord.Tags["sys.update_time"] = now 
+	delete(tmpRecord.Tags, tag)
+
+	err = UpdateRecord(tmpRecord)
+	if err != nil {
+		fmt.Fprintf(w, err.Error())
+		return
+	}
+
+	for _, h := range(hooks) {
+		h.APIKey = strings.TrimSpace(h.APIKey)
+		h.Kind = strings.TrimSpace(h.Kind)
+		h.URL = strings.TrimSpace(h.URL)
+
+		if h.APIKey == apikey && h.Kind == "delete" {
+			go func () {
+				jsn, err := json.Marshal(tmpRecord)
+				if err != nil {
+					fmt.Println(err.Error())
+					return	
+				}
+
+				parms := `data=` + string(jsn)
+				body := strings.NewReader(parms)
+				req, err := http.NewRequest("POST", h.URL, body)
+				if err != nil {
+					fmt.Println(err.Error())
+					return	
+				}
+
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					fmt.Println(err.Error())
+					return
+				}
+				defer resp.Body.Close()
+
+				bbody, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					fmt.Println(err.Error())
+					return	
+				}
+
+				if strings.Contains(string(bbody), "Connection refused") || strings.Contains(string(bbody), "Access Denied") {
+					return
+				}
+			}()
+		}
+	}
+
+	fmt.Fprintf(w, "Success\n")
+	return	
+
+}
+
 func handleGetRecord(w http.ResponseWriter, r *http.Request) {
 	key := r.FormValue("key")
 
@@ -330,6 +457,8 @@ func handleGetRecord(w http.ResponseWriter, r *http.Request) {
 
 func handleGetRecords(w http.ResponseWriter, r *http.Request) {
 	tag := r.FormValue("tag")
+	val := r.FormValue("val")
+
 	records := []Record{}
 
 	rec, err := GetRecords()
@@ -349,8 +478,14 @@ func handleGetRecords(w http.ResponseWriter, r *http.Request) {
 
 	for _, r := range rec {
 		for k, v := range r.Tags {
-			if strings.Contains(k, tag) || strings.Contains(v, tag) {
-				records = append(records, r)
+			if len(val) == 0 {
+				if strings.Contains(k, tag) || strings.Contains(v, tag) {
+					records = append(records, r)
+				}
+			} else {
+				if strings.Contains(k, tag) && strings.Contains(v, val) {
+					records = append(records, r)
+				}
 			}
 		}
 	}
@@ -385,8 +520,8 @@ func handleRegisterURLHook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if kind != "register" && kind != "update" {
-		fmt.Fprintf(w, "'kind' Parameter is not of type 'register' or type 'update'")
+	if kind != "register" && kind != "update" && kind != "delete" {
+		fmt.Fprintf(w, "'kind' Parameter is not of type 'register', 'update', or 'delete'")
 		return
 	}
 
@@ -561,6 +696,7 @@ func main() {
 	router.HandleFunc("/getrecords", handleGetRecords)
 	router.HandleFunc("/getrecord", handleGetRecord)
 	router.HandleFunc("/updaterecord", handleUpdateRecord)
+	router.HandleFunc("/deletetag", handleDeleteTag)
 	router.HandleFunc("/registerhook", handleRegisterURLHook)
 	router.HandleFunc("/deregisterhook", handleDeregisterURLHook)
         router.HandleFunc("/", handleHelp)
